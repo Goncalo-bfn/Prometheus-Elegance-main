@@ -83,7 +83,6 @@ const DEFAULT_PRODUCTS = [
 ];
 
 let catalog = [];
-let catalogFileHandle = null;
 let onlineMode = false;
 let onlineAuthenticated = false;
 let pendingOnlineSave = null;
@@ -98,12 +97,9 @@ const productDescriptionInput = document.getElementById('product-description');
 const productImageInput = document.getElementById('product-image');
 const previewBox = document.getElementById('preview-box');
 const previewImg = document.getElementById('product-image-preview');
-const fileInput = document.getElementById('json-import-input');
 const imageFileInput = document.getElementById('product-image-file');
 const editorStatus = document.getElementById('editor-status');
 const onlineAccessPanel = document.getElementById('online-access-panel');
-const onlineSaveButton = document.getElementById('save-direct-btn');
-const onlineLoadButton = document.getElementById('load-json-btn');
 const productSaveButton = document.getElementById('product-save-btn');
 const onlineLoginForm = document.getElementById('online-login-form');
 const onlineUsernameInput = document.getElementById('online-username');
@@ -158,7 +154,7 @@ function persistCatalog() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(catalog));
     return true;
   } catch {
-    setStatus('Não foi possível guardar automaticamente. Use “Baixar produtos” para guardar uma cópia.');
+    setStatus('Não foi possível guardar as alterações neste navegador.');
     return false;
   }
 }
@@ -175,8 +171,6 @@ async function loadCatalog() {
 
       onlineMode = true;
       onlineAccessPanel.style.display = 'block';
-      onlineSaveButton.hidden = true;
-      onlineLoadButton.hidden = true;
       productSaveButton.textContent = 'Salvar e publicar';
       catalog = normalized;
       renderCatalog();
@@ -195,7 +189,7 @@ async function loadCatalog() {
   try {
     saved = localStorage.getItem(STORAGE_KEY);
   } catch {
-    setStatus('O navegador não permite guardar automaticamente. Use “Baixar produtos” no fim.');
+    setStatus('Este navegador não permite guardar alterações localmente.');
   }
 
   if (saved) {
@@ -383,7 +377,7 @@ async function deleteCatalogProduct(productId, confirmDelete = false, button = n
   renderCatalog();
   resetForm();
   setStatus(saved
-    ? 'Produto removido desta lista. Use “Baixar produtos” para guardar a cópia.'
+    ? 'Produto removido desta lista local. Para publicar, abra o editor pelo site online.'
     : 'Produto removido desta sessão, mas não foi possível guardar no navegador.');
 }
 
@@ -459,7 +453,7 @@ async function saveProduct(product) {
   renderCatalog();
   resetForm();
   setStatus(saved
-    ? 'Produto atualizado apenas neste navegador. Use “Baixar produtos” para guardar a cópia.'
+    ? 'Produto atualizado apenas neste navegador. Para publicar, abra o editor pelo site online.'
     : 'Não foi possível guardar a alteração no navegador.');
 }
 
@@ -507,116 +501,6 @@ async function saveOnlineCatalog(products) {
   }
 }
 
-function parseCatalogFile(text) {
-  const data = JSON.parse(text);
-  if (!Array.isArray(data)) {
-    throw new Error('Esse arquivo não parece ser uma lista de produtos.');
-  }
-
-  const normalized = data.map((item) => normalizeProduct(item));
-  if (normalized.length === 0 || normalized.some((item) => !item)) {
-    throw new Error('O arquivo contém produtos inválidos. Nenhuma alteração foi aplicada.');
-  }
-  return normalized;
-}
-
-function applyImportedCatalog(products) {
-  catalog = products;
-  const saved = persistCatalog();
-  renderCatalog();
-  resetForm();
-  setStatus(saved
-    ? `Produtos carregados. Você já pode editar e salvar as alterações.`
-    : 'Produtos carregados. Edite e toque em “Salvar alterações” para guardar.');
-}
-
-async function openCatalogFile() {
-  if (onlineMode) {
-    await loadCatalog();
-    return;
-  }
-
-  if (typeof window.showOpenFilePicker === 'function') {
-    try {
-      const [handle] = await window.showOpenFilePicker({
-        multiple: false,
-        types: [{ description: 'Lista de produtos', accept: { 'application/json': ['.json'] } }],
-      });
-      const file = await handle.getFile();
-      const products = parseCatalogFile(await file.text());
-      catalogFileHandle = handle;
-      applyImportedCatalog(products);
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        setStatus(`Não foi possível carregar os produtos: ${error.message}`);
-      }
-    }
-    return;
-  }
-
-  fileInput.click();
-}
-
-function handleJsonImport(event) {
-  const [file] = event.target.files || [];
-  if (!file) return;
-
-  file.text()
-    .then((text) => {
-      applyImportedCatalog(parseCatalogFile(text));
-    })
-    .catch((error) => {
-      setStatus(`Não foi possível carregar os produtos: ${error.message}`);
-    })
-    .finally(() => {
-      event.target.value = '';
-    });
-}
-
-async function saveCatalogToFile() {
-  if (onlineMode) {
-    if (!onlineAuthenticated) {
-      setStatus('Entre com seu usuário e senha do admin para publicar na loja online.');
-      onlineAccessPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      onlineUsernameInput.focus();
-      return;
-    }
-
-    try {
-      await saveOnlineCatalog(catalog);
-
-      setStatus('Catálogo publicado. Abra a loja em outra aba ou atualize para conferir.');
-    } catch (error) {
-      setStatus(`Não foi possível publicar: ${error.message}`);
-    }
-    return;
-  }
-
-  try {
-    if (!catalogFileHandle && typeof window.showSaveFilePicker === 'function') {
-      catalogFileHandle = await window.showSaveFilePicker({
-        suggestedName: 'produtos-da-loja.json',
-        types: [{ description: 'Lista de produtos', accept: { 'application/json': ['.json'] } }],
-      });
-    }
-
-    if (!catalogFileHandle) {
-      downloadCatalog();
-      setStatus('Alterações salvas no arquivo baixado. Envie esse arquivo para quem publicou a loja para atualizar o site.');
-      return;
-    }
-
-    const writable = await catalogFileHandle.createWritable();
-    await writable.write(JSON.stringify(catalog, null, 2));
-    await writable.close();
-    setStatus('Alterações salvas no arquivo. Para atualizar a loja online, envie o arquivo para quem publicou o site.');
-  } catch (error) {
-    if (error.name !== 'AbortError') {
-      setStatus(`Não foi possível salvar as alterações: ${error.message}`);
-    }
-  }
-}
-
 function readImageAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -660,24 +544,12 @@ async function handleImageSelection() {
     previewBox.style.display = 'block';
     setStatus(onlineMode
       ? 'Foto pronta. Toque em “Salvar e publicar” para enviar o produto para a loja.'
-      : 'Foto pronta. Salve o produto e depois toque em “Salvar alterações”.');
+      : 'Foto pronta. Salve o produto. No modo local, a alteração fica apenas neste navegador.');
   } catch (error) {
     setStatus(error.message);
   } finally {
     imageFileInput.value = '';
   }
-}
-
-function downloadCatalog() {
-  const fileContent = JSON.stringify(catalog, null, 2);
-  const blob = new Blob([fileContent], { type: 'application/json' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = 'produtos-da-loja.json';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 function bindEvents() {
@@ -692,9 +564,6 @@ function bindEvents() {
 
   document.getElementById('cancel-edit-btn').addEventListener('click', resetForm);
 
-  document.getElementById('load-json-btn').addEventListener('click', openCatalogFile);
-  fileInput.addEventListener('change', handleJsonImport);
-  document.getElementById('save-direct-btn').addEventListener('click', saveCatalogToFile);
   imageFileInput.addEventListener('change', handleImageSelection);
 
   productImageInput.addEventListener('input', () => {

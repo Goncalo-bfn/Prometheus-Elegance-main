@@ -51,7 +51,7 @@ Abra `editor/index.html` no navegador ou use `abrir-editor.bat` no Windows.
 - No site publicado no Render, abra `https://SEU-SITE/editor/` e entre com as mesmas credenciais do painel admin na primeira vez. Depois, ao cadastrar ou editar um produto e tocar em **Salvar e publicar**, a mudança é gravada pelo servidor no catálogo do Supabase. Exclusões também são publicadas imediatamente.
 - O botão **Ver loja** abre a página da loja para conferir as mudanças.
 - Para editar fotos, escolha a imagem do celular/computador; o editor reduz a foto e inclui no catálogo.
-- Se abrir o editor como arquivo local/offline, ele não tem acesso ao servidor online: **Salvar produto** atualiza apenas a cópia local; use **Salvar alterações** para gerar um arquivo e depois publique o projeto novamente.
+- Se abrir o editor como arquivo local/offline, ele não tem acesso ao servidor online: **Salvar produto** atualiza apenas este navegador. Para publicar na loja, acesse o editor pelo endereço online.
 - No Render, configure o armazenamento Supabase descrito abaixo para que as alterações do catálogo não se percam quando o serviço reiniciar ou for publicado novamente.
 
 ### Persistir alterações no Render com Supabase
