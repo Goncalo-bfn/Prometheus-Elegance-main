@@ -295,7 +295,10 @@ const server = http.createServer((req, res) => {
   // --------------------------------------------------------------------------
   // Servir arquivos estáticos (HTML, CSS, JS, Imagens)
   // --------------------------------------------------------------------------
-  let filePath = path.join(__dirname, pathname === '/' ? 'index.html' : pathname);
+  const staticPath = pathname === '/'
+    ? 'index.html'
+    : `${pathname.replace(/^\/+/, '')}${pathname.endsWith('/') ? 'index.html' : ''}`;
+  const filePath = path.join(__dirname, staticPath);
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
