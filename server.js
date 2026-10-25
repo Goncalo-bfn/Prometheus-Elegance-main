@@ -16,8 +16,8 @@ const useDatabase = process.env.CATALOG_STORAGE === 'supabase';
 const isProduction = process.env.NODE_ENV === 'production' ||
   process.env.RENDER === 'true' ||
   process.env.RENDER === '1';
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+const supabaseKey = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const adminUsername = process.env.ADMIN_USERNAME || 'Yan';
 const adminPassword = process.env.ADMIN_PASSWORD || (isProduction ? '' : '7519');
 const adminSessionSecret = process.env.ADMIN_SESSION_SECRET || (isProduction ? '' : 'local-development-session-secret');
@@ -51,30 +51,52 @@ if (useDatabase) {
 const supabaseCatalogUrl = useDatabase
   ? new URL('/rest/v1/catalog', supabaseUrl)
   : null;
+const usesLegacySupabaseKey = useDatabase && !supabaseKey.startsWith('sb_secret_');
 
 async function requestCatalogFromDatabase(method, body) {
   const url = new URL(supabaseCatalogUrl);
   if (method === 'GET') {
-    url.search = 'id=eq.1&select=products';
+    url.searchParams.set('id', 'eq.1');
+    url.searchParams.set('select', 'products');
+  } else {
+    url.searchParams.set('on_conflict', 'id');
   }
 
   const response = await fetch(url, {
     method,
     headers: {
       apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
       'Content-Type': 'application/json',
-      ...(method === 'POST' ? { Prefer: 'resolution=merge-duplicates,return=minimal' } : {}),
+      ...(usesLegacySupabaseKey ? { Authorization: `Bearer ${supabaseKey}` } : {}),
+      ...(method === 'POST' && body.id === 1
+        ? { Prefer: body.seed ? 'return=minimal' : 'resolution=merge-duplicates,return=minimal' }
+        : {}),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...(body ? { body: JSON.stringify({ id: body.id, products: body.products }) } : {}),
   });
 
   if (!response.ok) {
     const details = await response.text();
-    throw new Error(`Supabase respondeu ${response.status}: ${details}`);
+    const error = new Error(`Supabase respondeu ${response.status}: ${details}`);
+    error.status = response.status;
+    throw error;
   }
 
-  return method === 'GET' ? response.json() : null;
+  if (method === 'GET') {
+    let rows;
+    try {
+      rows = await response.json();
+    } catch {
+      throw new Error('Supabase retornou uma resposta inválida ao ler o catálogo.');
+    }
+
+    if (!Array.isArray(rows)) {
+      throw new Error('Supabase retornou um formato inesperado ao ler o catálogo.');
+    }
+    return rows;
+  }
+
+  return null;
 }
 
 async function getCatalog() {
@@ -84,12 +106,27 @@ async function getCatalog() {
 
   const rows = await requestCatalogFromDatabase('GET');
   if (rows.length > 0) {
+    if (rows.length !== 1 || !Array.isArray(rows[0].products)) {
+      throw new Error('A tabela public.catalog precisa conter uma única linha id=1 com products do tipo jsonb em formato de lista.');
+    }
     return JSON.stringify(rows[0].products);
   }
 
   const defaults = JSON.parse(await fs.promises.readFile(DEFAULT_DATA_FILE, 'utf8'));
-  await requestCatalogFromDatabase('POST', { id: 1, products: defaults });
-  return JSON.stringify(defaults);
+  try {
+    await requestCatalogFromDatabase('POST', { id: 1, products: defaults, seed: true });
+    return JSON.stringify(defaults);
+  } catch (error) {
+    if (error.status !== 409) {
+      throw error;
+    }
+
+    const latestRows = await requestCatalogFromDatabase('GET');
+    if (latestRows.length === 1 && Array.isArray(latestRows[0].products)) {
+      return JSON.stringify(latestRows[0].products);
+    }
+    throw error;
+  }
 }
 
 async function saveCatalog(products) {
@@ -242,13 +279,12 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/products' && req.method === 'GET') {
     getCatalog()
       .then((data) => {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(data);
       })
       .catch((err) => {
         console.error('Erro ao ler catálogo:', err);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Erro ao ler produtos' }));
+        sendJson(res, 500, { error: 'Erro ao ler produtos. Consulte os logs do servidor para detalhes.' });
       });
     return;
   }
@@ -269,12 +305,11 @@ const server = http.createServer((req, res) => {
           if (Array.isArray(parsed)) {
             saveCatalog(parsed)
               .then(() => {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, count: parsed.length }));
+                sendJson(res, 200, { success: true, count: parsed.length });
               })
               .catch((err) => {
                 console.error('Erro ao salvar catálogo:', err);
-                sendJson(res, 500, { error: 'Erro ao salvar produtos' });
+                sendJson(res, 500, { error: 'Erro ao salvar produtos. Consulte os logs do servidor para detalhes.' });
               });
             return;
           }

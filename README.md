@@ -72,7 +72,7 @@ revoke all on table public.catalog from anon, authenticated;
 grant select, insert, update on table public.catalog to service_role;
 ```
 
-3. No painel do Supabase, copie a URL do projeto e uma chave secreta (`sb_secret_...` ou a chave `service_role`). A chave publishable (`sb_publishable_...`) não permite gravar com segurança pelo servidor.
+3. No painel do Supabase, copie a URL do projeto e uma chave secreta (`sb_secret_...` ou a chave `service_role`). A chave publishable (`sb_publishable_...`) não permite gravar com segurança pelo servidor. O servidor envia a chave nova `sb_secret_...` somente no cabeçalho `apikey`; para a chave legada `service_role`, também envia `Authorization: Bearer`.
 4. No Render, abra o serviço da loja e configure estas variáveis privadas:
    - `CATALOG_STORAGE` = `supabase`
    - `SUPABASE_URL` = URL do projeto Supabase (ou use `NEXT_PUBLIC_SUPABASE_URL`)
@@ -82,7 +82,7 @@ grant select, insert, update on table public.catalog to service_role;
    - `ADMIN_SESSION_SECRET` = segredo aleatório com pelo menos 32 caracteres
 5. Salve e aguarde a nova publicação terminar. O login do painel é validado pelo servidor e o cookie de sessão é `HttpOnly`. A chave secreta do Supabase e os segredos do admin devem ficar apenas nas variáveis privadas do Render; nunca os coloque no HTML ou JavaScript do navegador.
 
-O primeiro acesso inicializa a tabela com o catálogo padrão. Depois disso, o catálogo fica no banco; excluir um produto no painel é o que o remove. A chave publishable e os pacotes `@supabase/supabase-js` / `@supabase/ssr` não são necessários neste projeto, que usa um servidor Node.js simples, sem Next.js, e conecta ao Supabase pelo servidor. O plano gratuito do Supabase tem limites e pode pausar projetos sem atividade, então confira as condições atuais do plano antes de usar em produção.
+Se a tabela estiver vazia, o primeiro acesso inicializa uma única linha com o catálogo padrão; uma linha existente nunca é substituída durante essa inicialização. Depois disso, o catálogo fica no banco; excluir um produto no painel é o que o remove. A chave publishable e os pacotes `@supabase/supabase-js` / `@supabase/ssr` não são necessários neste projeto, que usa um servidor Node.js simples, sem Next.js, e conecta ao Supabase pelo servidor. O plano gratuito do Supabase tem limites e pode pausar projetos sem atividade, então confira as condições atuais do plano antes de usar em produção.
 
 ---
 

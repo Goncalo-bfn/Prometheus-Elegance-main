@@ -87,7 +87,8 @@ const DEFAULT_PRODUCTS = [
 ];
 
 let products = [];
-let isBackendConnected = false;
+let hasServerSession = false;
+let catalogLoadedFromServer = false;
 const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /* ==========================================================================
@@ -109,11 +110,16 @@ function updateAuthView(isAuth) {
 async function checkAuth() {
   try {
     const response = await fetch('/api/admin/session', { cache: 'no-store' });
+    hasServerSession = response.ok;
+    if (!hasServerSession) catalogLoadedFromServer = false;
     updateAuthView(response.ok);
     if (response.ok) {
       await loadAdminProducts();
+    } else if (response.status !== 401) {
+      showToast(`Não foi possível verificar o acesso ao servidor (HTTP ${response.status}).`, 'error', 6000);
     }
   } catch (error) {
+    hasServerSession = false;
     updateAuthView(false);
     showToast('Não foi possível conectar ao servidor. Inicie o servidor e tente novamente.', 'error', 6000);
   }
@@ -165,6 +171,8 @@ function initLogin() {
       } catch (error) {
         console.error('Não foi possível encerrar a sessão no servidor:', error);
       } finally {
+        hasServerSession = false;
+        catalogLoadedFromServer = false;
         updateAuthView(false);
       }
     });
@@ -174,8 +182,7 @@ function initLogin() {
 /* ==========================================================================
    2. Indicador de Conexão com Servidor
    ========================================================================== */
-function updateServerStatus(connected) {
-  isBackendConnected = Boolean(connected);
+function updateServerStatus(connected, detail = '') {
   const badge = document.getElementById('server-status-badge');
   const text = document.getElementById('server-status-text');
 
@@ -187,8 +194,12 @@ function updateServerStatus(connected) {
     if (text) text.textContent = 'Servidor Ativo (Catálogo conectado)';
   } else {
     badge.className = 'admin-status-badge status-offline';
-    badge.title = 'Servidor desligado. Execute o iniciar-servidor.bat para gravar no arquivo.';
-    if (text) text.textContent = 'Modo Navegador (Inicie o servidor)';
+    badge.title = detail || 'Servidor indisponível. Alterações feitas aqui não serão publicadas online.';
+    if (text) {
+      text.textContent = hasServerSession
+        ? 'Erro ao carregar catálogo do servidor'
+        : 'Modo Navegador (sem servidor)';
+    }
   }
 }
 
@@ -225,29 +236,41 @@ function showToast(message, type = 'info', duration = 4000) {
    4. Carregamento dos Produtos
    ========================================================================== */
 async function loadAdminProducts() {
-  // 1. Tenta carregar do servidor backend (/api/products)
   try {
     const res = await fetch('/api/products', { cache: 'no-store' });
-    if (res.ok) {
-      let data = await res.json();
-      if (Array.isArray(data)) {
-        updateServerStatus(true);
-        products = data;
-        try {
-          localStorage.setItem('prometheus_catalog', JSON.stringify(products));
-        } catch {}
-
-        renderProductsGrid();
+    if (!res.ok) {
+      if (res.status !== 404 || hasServerSession) {
+        updateServerStatus(false, `A API do catálogo respondeu HTTP ${res.status}.`);
+        showToast(`Não foi possível carregar o catálogo do servidor (HTTP ${res.status}).`, 'error', 7000);
         return;
       }
+    } else {
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        throw new Error('A API retornou um formato de catálogo inválido.');
+      }
+
+      updateServerStatus(true);
+      products = data;
+      catalogLoadedFromServer = true;
+      try {
+        localStorage.setItem('prometheus_catalog', JSON.stringify(products));
+      } catch {}
+
+      renderProductsGrid();
+      return;
     }
-  } catch {
-    // Servidor offline ou rodando sem API
+  } catch (error) {
+    if (hasServerSession) {
+      updateServerStatus(false, error.message);
+      showToast(`Não foi possível carregar o catálogo do servidor: ${error.message}`, 'error', 7000);
+      return;
+    }
   }
 
   updateServerStatus(false);
 
-  // 2. Tenta carregar do cache do navegador (localStorage)
+  // Browser-only mode remains available when no backend API is present.
   const localCache = localStorage.getItem('prometheus_catalog');
   if (localCache) {
     try {
@@ -333,7 +356,7 @@ function renderProductsGrid() {
           Editar
         </button>
         <button type="button" class="admin-btn-action admin-btn-delete" data-id="${product.id}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
           Excluir
         </button>
       </div>
@@ -474,6 +497,7 @@ async function saveProductFromForm() {
   }
 
   try {
+    const previousProducts = [...products];
     if (id) {
       // Editar produto existente
       const index = products.findIndex((p) => p.id === id);
@@ -500,7 +524,13 @@ async function saveProductFromForm() {
       products.unshift(newProduct);
     }
 
-    const { backendSaved, localSaved } = await persistProducts();
+    const { backendSaved, localSaved, error } = await persistProducts();
+    if (error) {
+      products = previousProducts;
+      renderProductsGrid();
+      showToast(`Não foi possível salvar o produto: ${error}`, 'error', 7000);
+      return;
+    }
     document.getElementById('product-modal').close();
     renderProductsGrid();
 
@@ -526,14 +556,21 @@ async function deleteProduct(productId) {
   const confirmDelete = confirm(`Deseja realmente excluir o produto "${product.name}"?`);
   if (!confirmDelete) return;
 
+  const previousProducts = [...products];
   products = products.filter((p) => p.id !== productId);
-  const { backendSaved } = await persistProducts();
+  const { backendSaved, localSaved, error } = await persistProducts();
+  if (error) {
+    products = previousProducts;
+    renderProductsGrid();
+    showToast(`Não foi possível excluir o produto: ${error}`, 'error', 7000);
+    return;
+  }
   renderProductsGrid();
 
   if (backendSaved) {
     showToast('Produto excluído com sucesso do catálogo.', 'success');
-  } else {
-    showToast('Produto excluído (memória local).', 'info');
+  } else if (localSaved) {
+    showToast('Produto excluído apenas neste navegador; não foi publicado online.', 'warning', 6000);
   }
 }
 
@@ -541,41 +578,57 @@ async function deleteProduct(productId) {
    7. Persistência (Servidor Backend & Cache Local)
    ========================================================================== */
 async function persistProducts() {
-  let localSaved = false;
-  let backendSaved = false;
+  if (hasServerSession) {
+    if (!catalogLoadedFromServer) {
+      return {
+        backendSaved: false,
+        localSaved: false,
+        error: 'O catálogo do servidor não foi carregado. Recarregue o painel antes de alterar produtos.',
+      };
+    }
 
-  // 1. Salva no armazenamento do navegador (com proteção contra QuotaExceededError)
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(products),
+      });
+      if (!res.ok) {
+        let details = `HTTP ${res.status}`;
+        try {
+          const result = await res.json();
+          if (typeof result.error === 'string') details = result.error;
+        } catch {}
+        updateServerStatus(false, details);
+        return { backendSaved: false, localSaved: false, error: details };
+      }
+
+      updateServerStatus(true);
+      try {
+        localStorage.setItem('prometheus_catalog', JSON.stringify(products));
+      } catch (error) {
+        console.warn('Não foi possível atualizar o cache do catálogo:', error);
+      }
+      window.dispatchEvent(new CustomEvent('prometheus-catalog-updated', {
+        detail: { products: [...products] },
+      }));
+      return { backendSaved: true, localSaved: false, error: null };
+    } catch (error) {
+      updateServerStatus(false, error.message);
+      return { backendSaved: false, localSaved: false, error: error.message };
+    }
+  }
+
   try {
     localStorage.setItem('prometheus_catalog', JSON.stringify(products));
     window.dispatchEvent(new CustomEvent('prometheus-catalog-updated', {
       detail: { products: [...products] },
     }));
-    localSaved = true;
-  } catch (e) {
-    console.warn('Erro ao salvar no localStorage:', e);
+    return { backendSaved: false, localSaved: true, error: null };
+  } catch (error) {
+    console.warn('Erro ao salvar no localStorage:', error);
+    return { backendSaved: false, localSaved: false, error: error.message };
   }
-
-  // 2. Salva no backend via API se o servidor estiver rodando
-  try {
-    const res = await fetch('/api/products', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(products),
-    });
-
-    if (res.ok) {
-      backendSaved = true;
-      updateServerStatus(true);
-    } else {
-      updateServerStatus(false);
-    }
-  } catch {
-    updateServerStatus(false);
-  }
-
-  return { backendSaved, localSaved };
 }
 
 /* ==========================================================================
