@@ -1,12 +1,6 @@
 /**
  * Prometheus Elegance — JavaScript do Painel Administrativo
- * Usuário: Yan | Senha: 7519
  */
-
-const ADMIN_CREDENTIALS = {
-  user: 'Yan',
-  pass: '7519',
-};
 
 // Catálogo base de segurança
 const DEFAULT_PRODUCTS = [
@@ -97,20 +91,31 @@ let isBackendConnected = false;
 const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /* ==========================================================================
-   1. Autenticação Simples (Yan / 7519)
+   1. Autenticação administrativa pelo servidor
    ========================================================================== */
-function checkAuth() {
-  const isAuth = sessionStorage.getItem('prometheus_admin_auth') === 'true';
+function updateAuthView(isAuth) {
   const loginView = document.getElementById('login-view');
   const dashboardView = document.getElementById('dashboard-view');
 
   if (isAuth) {
     if (loginView) loginView.style.display = 'none';
     if (dashboardView) dashboardView.style.display = 'block';
-    loadAdminProducts();
   } else {
     if (loginView) loginView.style.display = 'flex';
     if (dashboardView) dashboardView.style.display = 'none';
+  }
+}
+
+async function checkAuth() {
+  try {
+    const response = await fetch('/api/admin/session', { cache: 'no-store' });
+    updateAuthView(response.ok);
+    if (response.ok) {
+      await loadAdminProducts();
+    }
+  } catch (error) {
+    updateAuthView(false);
+    showToast('Não foi possível conectar ao servidor. Inicie o servidor e tente novamente.', 'error', 6000);
   }
 }
 
@@ -120,21 +125,33 @@ function initLogin() {
   const logoutBtn = document.getElementById('btn-logout');
 
   if (form) {
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const usernameInput = document.getElementById('login-username').value.trim();
-      const passwordInput = document.getElementById('login-password').value.trim();
+      const passwordInput = document.getElementById('login-password').value;
 
-      if (
-        usernameInput.toLowerCase() === ADMIN_CREDENTIALS.user.toLowerCase() &&
-        passwordInput === ADMIN_CREDENTIALS.pass
-      ) {
-        sessionStorage.setItem('prometheus_admin_auth', 'true');
-        if (errorMsg) errorMsg.style.display = 'none';
-        checkAuth();
-      } else {
+      try {
+        const response = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: usernameInput, password: passwordInput }),
+        });
+
+        if (response.ok) {
+          if (errorMsg) errorMsg.style.display = 'none';
+          await checkAuth();
+          return;
+        }
+
         if (errorMsg) {
-          errorMsg.textContent = 'Usuário ou senha incorretos.';
+          errorMsg.textContent = response.status === 401
+            ? 'Usuário ou senha incorretos.'
+            : 'Não foi possível entrar. Tente novamente.';
+          errorMsg.style.display = 'block';
+        }
+      } catch (error) {
+        if (errorMsg) {
+          errorMsg.textContent = 'Servidor indisponível. Tente novamente em instantes.';
           errorMsg.style.display = 'block';
         }
       }
@@ -142,9 +159,14 @@ function initLogin() {
   }
 
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      sessionStorage.removeItem('prometheus_admin_auth');
-      checkAuth();
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await fetch('/api/admin/logout', { method: 'POST' });
+      } catch (error) {
+        console.error('Não foi possível encerrar a sessão no servidor:', error);
+      } finally {
+        updateAuthView(false);
+      }
     });
   }
 }
@@ -161,8 +183,8 @@ function updateServerStatus(connected) {
 
   if (connected) {
     badge.className = 'admin-status-badge status-online';
-    badge.title = 'Servidor local ativo! As alterações são gravadas no arquivo do computador.';
-    if (text) text.textContent = 'Servidor Ativo (Gravando no disco)';
+    badge.title = 'Servidor ativo! As alterações são enviadas para o armazenamento configurado.';
+    if (text) text.textContent = 'Servidor Ativo (Catálogo conectado)';
   } else {
     badge.className = 'admin-status-badge status-offline';
     badge.title = 'Servidor desligado. Execute o iniciar-servidor.bat para gravar no arquivo.';

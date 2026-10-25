@@ -57,14 +57,17 @@ revoke all on table public.catalog from anon, authenticated;
 grant select, insert, update on table public.catalog to service_role;
 ```
 
-3. No painel do Supabase, copie a URL do projeto e a chave `service_role`.
-4. No Render, abra o serviço da loja e adicione estas variáveis de ambiente:
+3. No painel do Supabase, copie a URL do projeto e uma chave secreta (`sb_secret_...` ou a chave `service_role`). A chave publishable (`sb_publishable_...`) não permite gravar com segurança pelo servidor.
+4. No Render, abra o serviço da loja e configure estas variáveis privadas:
    - `CATALOG_STORAGE` = `supabase`
-   - `SUPABASE_URL` = URL do projeto Supabase
-   - `SUPABASE_SERVICE_ROLE_KEY` = chave `service_role` do Supabase
-5. Salve e aguarde a nova publicação terminar. A chave `service_role` deve ficar apenas nas variáveis privadas do Render; nunca a coloque no HTML ou JavaScript do navegador.
+   - `SUPABASE_URL` = URL do projeto Supabase (ou use `NEXT_PUBLIC_SUPABASE_URL`)
+   - `SUPABASE_SECRET_KEY` = chave secreta do Supabase (`sb_secret_...`); também aceita `SUPABASE_SERVICE_ROLE_KEY` para projetos com a chave antiga
+   - `ADMIN_USERNAME` = usuário do painel (opcional; padrão `Yan`)
+   - `ADMIN_PASSWORD` = nova senha forte do painel (mínimo 12 caracteres)
+   - `ADMIN_SESSION_SECRET` = segredo aleatório com pelo menos 32 caracteres
+5. Salve e aguarde a nova publicação terminar. O login do painel é validado pelo servidor e o cookie de sessão é `HttpOnly`. A chave secreta do Supabase e os segredos do admin devem ficar apenas nas variáveis privadas do Render; nunca os coloque no HTML ou JavaScript do navegador.
 
-O primeiro acesso inicializa a tabela com o catálogo padrão. Depois disso, o catálogo fica no banco; excluir um produto no painel é o que o remove. O plano gratuito do Supabase tem limites e pode pausar projetos sem atividade, então confira as condições atuais do plano antes de usar em produção.
+O primeiro acesso inicializa a tabela com o catálogo padrão. Depois disso, o catálogo fica no banco; excluir um produto no painel é o que o remove. A chave publishable e os pacotes `@supabase/supabase-js` / `@supabase/ssr` não são necessários neste projeto, que usa um servidor Node.js simples, sem Next.js, e conecta ao Supabase pelo servidor. O plano gratuito do Supabase tem limites e pode pausar projetos sem atividade, então confira as condições atuais do plano antes de usar em produção.
 
 ---
 
@@ -73,8 +76,9 @@ O primeiro acesso inicializa a tabela com o catálogo padrão. Depois disso, o c
 Acesse pelo navegador:
 👉 **`http://localhost:3000/admin.html`** (ou clique no link discreto *"Área Administrativa"* no rodapé da loja).
 
-* **Usuário:** `Yan`
-* **Senha:** `7519`
+* **Usuário local padrão:** `Yan`
+* **Senha local padrão:** `7519`
+* **No Render:** use `ADMIN_USERNAME` e `ADMIN_PASSWORD` configurados nas variáveis privadas do serviço.
 
 ### O que você pode fazer no Admin:
 1. **Adicionar novos produtos:** Clique em `+ Novo Produto`, preencha o nome, categoria, preço, descrição e selecione a foto direto do seu celular ou computador.
