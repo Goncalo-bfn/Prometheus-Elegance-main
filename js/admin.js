@@ -547,6 +547,9 @@ async function persistProducts() {
   // 1. Salva no armazenamento do navegador (com proteção contra QuotaExceededError)
   try {
     localStorage.setItem('prometheus_catalog', JSON.stringify(products));
+    window.dispatchEvent(new CustomEvent('prometheus-catalog-updated', {
+      detail: { products: [...products] },
+    }));
     localSaved = true;
   } catch (e) {
     console.warn('Erro ao salvar no localStorage:', e);

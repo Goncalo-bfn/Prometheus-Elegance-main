@@ -94,11 +94,55 @@ const DEFAULT_PRODUCTS = [
 ];
 
 // Estado da Aplicação
+const CART_STORAGE_KEY = 'prometheus_cart';
 let catalogProducts = [...DEFAULT_PRODUCTS];
 const cart = new Map(); // productId => quantidade
 const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const formatCurrency = (val) => currencyFormatter.format(val);
+
+function loadCartFromStorage() {
+  try {
+    const rawCart = localStorage.getItem(CART_STORAGE_KEY);
+    if (!rawCart) {
+      cart.clear();
+      return;
+    }
+
+    const parsedCart = JSON.parse(rawCart);
+    if (!parsedCart || typeof parsedCart !== 'object') {
+      cart.clear();
+      return;
+    }
+
+    const nextCart = new Map();
+    Object.entries(parsedCart).forEach(([productId, quantity]) => {
+      const qty = Number(quantity);
+      if (productId && Number.isFinite(qty) && qty > 0) {
+        nextCart.set(productId, qty);
+      }
+    });
+
+    cart.clear();
+    nextCart.forEach((qty, productId) => cart.set(productId, qty));
+  } catch {
+    cart.clear();
+  }
+}
+
+function saveCartToStorage() {
+  if (cart.size === 0) {
+    try {
+      localStorage.removeItem(CART_STORAGE_KEY);
+    } catch {}
+    return;
+  }
+
+  const serializedCart = Object.fromEntries([...cart.entries()].filter(([, qty]) => qty > 0));
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(serializedCart));
+  } catch {}
+}
 
 /* ==========================================================================
    1. Carregamento dos Produtos (API -> Cache Local -> products.json -> Fallback)
@@ -376,7 +420,7 @@ function renderProductsIntoPanel(panel, categoryName) {
 function addToCart(product) {
   const currentQty = cart.get(product.id) || 0;
   cart.set(product.id, currentQty + 1);
-
+  saveCartToStorage();
   updateCartUI();
 
   // Notificação acessível
@@ -396,11 +440,13 @@ function updateCartItemQty(productId, delta) {
     cart.set(productId, next);
   }
 
+  saveCartToStorage();
   updateCartUI();
 }
 
 function removeCartItem(productId) {
   cart.delete(productId);
+  saveCartToStorage();
   updateCartUI();
 }
 
@@ -522,6 +568,7 @@ function initCartModal() {
    Inicialização Global
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', async () => {
+  loadCartFromStorage();
   await loadProducts();
   initMobileMenu();
   initCopyWhatsApp();
@@ -529,15 +576,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   initCartModal();
   updateCartUI();
 
-  // Atualização em tempo real caso produtos sejam salvos no painel admin em outra aba
+  // Atualização em tempo real caso produtos/carrinho sejam alterados em outra aba
   window.addEventListener('storage', async (e) => {
+    if (e.key === CART_STORAGE_KEY) {
+      loadCartFromStorage();
+      updateCartUI();
+    }
+
     if (e.key === 'prometheus_catalog') {
       await loadProducts();
     }
   });
 
-  // Atualiza catálogo sempre que o usuário voltar para a aba da loja
+  window.addEventListener('prometheus-catalog-updated', async (e) => {
+    const nextProducts = e.detail?.products;
+    if (Array.isArray(nextProducts)) {
+      catalogProducts = nextProducts;
+      updateCartUI();
+      return;
+    }
+
+    await loadProducts();
+  });
+
+  // Atualiza catálogo/carrinho sempre que o usuário voltar para a aba da loja
   window.addEventListener('focus', async () => {
+    loadCartFromStorage();
+    updateCartUI();
     await loadProducts();
   });
 });
