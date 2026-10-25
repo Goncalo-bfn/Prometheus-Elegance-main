@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo — Prometheus Elegance</title>
+    <link rel="icon" href="./assets/images/logo.png" type="image/png">
+
+    <!-- Fontes e Estilos -->
+    <link rel="stylesheet" href="./css/fonts.css">
+    <link rel="stylesheet" href="./css/site.css">
+    <link rel="stylesheet" href="./css/admin.css">
+  </head>
+  <body class="admin-body">
+    <!-- ====================================================================
+         1. TELA DE LOGIN
+         ==================================================================== -->
+    <div id="login-view" class="admin-login-screen">
+      <div class="admin-login-card">
+        <div class="admin-login-header">
+          <img src="./assets/images/logo.png" width="48" height="56" alt="Logo Prometheus Elegance">
+          <h1>Painel <span>Admin</span></h1>
+          <p>Prometheus Elegance</p>
+        </div>
+
+        <form id="login-form" class="admin-form">
+          <div class="form-group">
+            <label for="login-username">Usuário</label>
+            <input type="text" id="login-username" required placeholder="Digite seu usuário" autocomplete="username">
+          </div>
+
+          <div class="form-group">
+            <label for="login-password">Senha</label>
+            <input type="password" id="login-password" required placeholder="Digite sua senha" autocomplete="current-password">
+          </div>
+
+          <p id="login-error" class="admin-error-msg" style="display: none;"></p>
+
+          <button type="submit" class="brand-button brand-button-gold admin-btn-full">
+            Entrar no Painel
+          </button>
+        </form>
+
+        <a href="./index.html" class="admin-back-link">← Voltar para a Loja</a>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         2. TELA DO PAINEL PRINCIPAL (APÓS LOGIN)
+         ==================================================================== -->
+    <div id="dashboard-view" class="admin-dashboard-screen" style="display: none;">
+      <!-- Barra Superior -->
+      <header class="admin-header">
+        <div class="site-container admin-header-inner">
+          <div class="admin-brand">
+            <img src="./assets/images/logo.png" width="36" height="42" alt="Logo">
+            <h2>Prometheus <span>Admin</span></h2>
+          </div>
+
+          <div class="admin-header-actions">
+            <a href="./index.html" target="_blank" class="brand-button brand-button-outline admin-header-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+              Ver Loja
+            </a>
+            <button type="button" id="btn-logout" class="admin-logout-btn" title="Sair da conta">
+              Sair
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Conteúdo do Painel -->
+      <main class="site-container admin-content">
+        <!-- Barra de Ações -->
+        <div class="admin-toolbar">
+          <div>
+            <h3>Gerenciar Catálogo</h3>
+            <p class="admin-subtitle" id="products-count-label">Carregando produtos...</p>
+          </div>
+
+          <div class="admin-toolbar-controls">
+            <select id="filter-category" class="admin-select" aria-label="Filtrar por categoria">
+              <option value="todas">Todas as categorias</option>
+              <option value="Camisetas esportivas">Camisetas esportivas</option>
+              <option value="Shorts e bermudas">Shorts e bermudas</option>
+              <option value="Conjuntos e agasalhos">Conjuntos e agasalhos</option>
+              <option value="Fitness: tops, shorts e legging">Fitness</option>
+              <option value="Tênis">Tênis</option>
+              <option value="Bonés, garrafas e acessórios">Acessórios</option>
+            </select>
+
+            <button type="button" id="btn-open-create-modal" class="brand-button brand-button-gold">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Novo Produto
+            </button>
+          </div>
+        </div>
+
+        <!-- Grade de Produtos -->
+        <div id="admin-products-grid" class="admin-grid"></div>
+      </main>
+    </div>
+
+    <!-- ====================================================================
+         3. MODAL DE CADASTRO / EDIÇÃO DE PRODUTO
+         ==================================================================== -->
+    <dialog id="product-modal" class="admin-modal">
+      <div class="admin-modal-inner">
+        <div class="admin-modal-header">
+          <h3 id="modal-title">Novo Produto</h3>
+          <button type="button" id="btn-close-modal" class="admin-modal-close" aria-label="Fechar">&times;</button>
+        </div>
+
+        <form id="product-form" class="admin-form">
+          <input type="hidden" id="prod-id">
+
+          <!-- Nome -->
+          <div class="form-group">
+            <label for="prod-name">Nome do Produto *</label>
+            <input type="text" id="prod-name" required placeholder="Ex: Camiseta Dry-Fit Black Edition">
+          </div>
+
+          <div class="form-row">
+            <!-- Categoria -->
+            <div class="form-group">
+              <label for="prod-category">Categoria *</label>
+              <select id="prod-category" required class="admin-select">
+                <option value="Camisetas esportivas">Camisetas esportivas</option>
+                <option value="Shorts e bermudas">Shorts e bermudas</option>
+                <option value="Conjuntos e agasalhos">Conjuntos e agasalhos</option>
+                <option value="Fitness: tops, shorts e legging">Fitness: tops, shorts e legging</option>
+                <option value="Tênis">Tênis</option>
+                <option value="Bonés, garrafas e acessórios">Bonés, garrafas e acessórios</option>
+              </select>
+            </div>
+
+            <!-- Preço -->
+            <div class="form-group">
+              <label for="prod-price">Preço (R$) *</label>
+              <input type="number" id="prod-price" required step="0.01" min="0" placeholder="Ex: 89.90">
+            </div>
+          </div>
+
+          <!-- Descrição -->
+          <div class="form-group">
+            <label for="prod-desc">Descrição do Produto</label>
+            <textarea id="prod-desc" rows="3" placeholder="Detalhes, tecido, diferenciais..."></textarea>
+          </div>
+
+          <!-- Imagem / Foto -->
+          <div class="form-group">
+            <label>Foto do Produto</label>
+            <div class="admin-upload-zone">
+              <div id="image-preview-container" class="admin-preview-box" style="display: none;">
+                <img id="image-preview" src="" alt="Prévia da foto">
+              </div>
+              <label for="prod-image-file" class="admin-upload-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                <span>Selecionar foto do celular ou computador</span>
+              </label>
+              <input type="file" id="prod-image-file" accept="image/*" style="display: none;">
+            </div>
+            <input type="hidden" id="prod-image-data">
+          </div>
+
+          <div class="admin-modal-actions">
+            <button type="button" id="btn-cancel-modal" class="brand-button brand-button-outline">Cancelar</button>
+            <button type="submit" id="btn-save-product" class="brand-button brand-button-gold">Salvar Produto</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- Script do Painel Administrativo -->
+    <script src="./js/admin.js"></script>
+  </body>
+</html>
