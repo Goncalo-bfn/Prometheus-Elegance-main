@@ -632,29 +632,6 @@ async function persistProducts() {
 }
 
 /* ==========================================================================
-   8. Exportar Catálogo JSON (Backup Manual)
-   ========================================================================== */
-function initExport() {
-  const btnExport = document.getElementById('btn-export-json');
-  if (!btnExport) return;
-
-  btnExport.addEventListener('click', () => {
-    try {
-      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(products, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute('href', dataStr);
-      downloadAnchor.setAttribute('download', 'products.json');
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-      showToast('Arquivo products.json baixado com sucesso!', 'success');
-    } catch {
-      showToast('Falha ao exportar catálogo.', 'error');
-    }
-  });
-}
-
-/* ==========================================================================
    9. Redimensionamento de Foto via Canvas (Direto no Navegador / Celular)
    ========================================================================== */
 function resizeImage(file, maxWidth, maxHeight, quality) {
@@ -700,6 +677,5 @@ function resizeImage(file, maxWidth, maxHeight, quality) {
 document.addEventListener('DOMContentLoaded', () => {
   initLogin();
   initModal();
-  initExport();
   checkAuth();
 });
